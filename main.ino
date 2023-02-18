@@ -1,20 +1,16 @@
-#include <Adafruit_GFX.h>
-#include <FastLED_NeoMatrix.h>
 #include <FastLED.h>
+#include <FastLED_NeoMatrix.h>
 
-const int rows = 32;
-const int cols = 32;
-#define mh 32
-#define mw 32
-const int matrixRows = 32;
-const int matrixCols = 32;
-const int LED_PIN = 5;
-#define LED_TYPE WS2812B
-#define COLOR_ORDER GRB
-#define NUM_LEDS (matrixRows * matrixCols)
-#define BRIGHTNESS 160
-const int lifeMin = 69;
-const int lifeReset = 6;
+#define LED_PIN 5
+#define LED_COUNT 1024
+
+CRGB leds[LED_COUNT];
+#define BRIGHTNESS 16
+#define MATRIX_TILE_WIDTH 32
+#define MATRIX_TILE_HEIGHT 32
+#define MATRIX_WIDTH 32
+#define MATRIX_HEIGHT 32
+#define MATRIX_TYPE
 
 // This could also be defined as matrix->color(255,0,0) but those defines
 // are meant to work for adafruit_gfx backends that are lacking color()
@@ -56,171 +52,90 @@ const int lifeReset = 6;
 #define LED_WHITE_HIGH		(LED_RED_HIGH    + LED_GREEN_HIGH    + LED_BLUE_HIGH)
 
 
-const int ledColor = 3;
 
-int grid[rows][cols];
-CRGB leds[NUM_LEDS];
-FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, matrixRows, matrixCols, 1, 1, 
+//FastLED_NeoMatrix matrix(leds, MATRIX_TILE_WIDTH, MATRIX_TILE_HEIGHT, MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE);
+
+FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, MATRIX_TILE_HEIGHT, MATRIX_TILE_HEIGHT, 1, 1, 
   NEO_MATRIX_BOTTOM     + NEO_MATRIX_RIGHT +
     NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG + 
     NEO_TILE_TOP + NEO_TILE_RIGHT +  NEO_TILE_PROGRESSIVE);
 
 
-unsigned long previousMillis = 0;
-const long interval = 4000; // Change state every 4 secs
+int grid[32][32];
+
 
 void setup() {
-Serial.begin(115200);
-
-setupGrid();
-
-FastLED.addLeds<NEOPIXEL,LED_PIN>(  leds, NUM_LEDS  ).setCorrection(TypicalLEDStrip);  
-matrix->begin();
-matrix->setBrightness(BRIGHTNESS);
-matrix->clear();
-
-previousMillis = millis();
-
- // Calculate the values of the Mandelbrot set
-  /*for (int x = 0; x < rows; x++) {
-    for (int y = 0; y < cols; y++) {
-      int real = map(x, 0, rows, -2, 2);
-      int imag = map(y, 0, cols, -2, 2);
-      int iterations = mandelbrot(real, imag);
-      grid[x][y] = iterations;
-    }
-  }*/
-
-
-
+  FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, LED_COUNT);
+  FastLED.setBrightness(BRIGHTNESS);
+  matrix->begin();
+  matrix->setTextWrap(false);
+  matrix->setBrightness(BRIGHTNESS);
+  matrix->fillScreen(CRGB::Black);
+  randomSeed(analogRead(0));
+  generateRandomGrid();
 }
 
 void loop() {
-    delay(100);
-    life();
-    //displayGrid(grid);
-    displayLedGrid(grid);
-
-    if (millis() - previousMillis >= interval) {
-      previousMillis = millis();
-      //ESP.restart();
-      int x = random(2, rows - 4);
-      int y = random(2, cols - 4);
-      grid[x][y] = 1;
-      grid[x + 1][y] = 1;
-    }
+  updateGrid();
+  displayGrid();
+  delay(1000);
 }
 
-void setupGrid() {
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
-      grid[i][j] = random(2);
-    }
-  }
-}
-
-
-int mandelbrot(int real, int imag) {
-  int iterations = 0;
-  float realPart = 0;
-  float imagPart = 0;
-  float realSquared = 0;
-  float imagSquared = 0;
-  while (iterations < 255 && realSquared + imagSquared <= 4) {
-    imagPart = 2 * realPart * imagPart + imag;
-    realPart = realSquared - imagSquared + real;
-    realSquared = realPart * realPart;
-    imagSquared = imagPart * imagPart;
-    iterations++;
-  }
-  return iterations;
-}
-
-
-void life() {
-  int newGrid[rows][cols];
-  int count = 0;
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
-      int neighbors = countNeighbors(i, j);
-      if (grid[i][j] == 1 && (neighbors == 2 || neighbors == 3)) {
-        newGrid[i][j] = 1;
-        count++;
-      } else if (grid[i][j] == 0 && neighbors == 3) {
-        newGrid[i][j] = 1;
-        count++;
+void generateRandomGrid() {
+  for (int i = 0; i < MATRIX_WIDTH; i++) {
+    for (int j = 0; j < MATRIX_HEIGHT; j++) {
+      if (random(0, 8) == 1) {
+        grid[i][j] = 1;
+        matrix->drawPixel(i, j, (uint16_t)LED_WHITE_MEDIUM);
       } else {
-        newGrid[i][j] = 0;
+        grid[i][j] = 0;
       }
     }
   }
-  if (count <= lifeMin){
-      int x = random(2, rows - 4);
-      int y = random(2, cols - 4);
-      newGrid[x][y] = 1;
-      newGrid[x + 1][y] = 1;
-  }
-  copyGrid(newGrid, grid);
-  if (count <= lifeReset){
-      setupGrid();
-  }
+}
 
-  //Serial.println(count);
+void updateGrid() {
+  int newGrid[32][32];
+  int lifeCount = 0;
+  for (int i = 0; i < MATRIX_WIDTH; i++) {
+    for (int j = 0; j < MATRIX_HEIGHT; j++) {
+      int neighbors = countNeighbors(i, j);
+      if (grid[i][j] == 1) {
+        if (neighbors < 2 || neighbors > 3) {
+          newGrid[i][j] = 0;
+          lifeCount++;
+          matrix->drawPixel(i, j, (uint16_t)LED_RED_MEDIUM );
+        } else {
+          newGrid[i][j] = 1;
+          lifeCount++;
+          matrix->drawPixel(i, j, (uint16_t)LED_BLUE_MEDIUM );
+        }
+      } else {
+        if (neighbors == 3) {
+          newGrid[i][j] = 1;
+          matrix->drawPixel(i, j, (uint16_t)LED_BLUE_MEDIUM );
+        } else {
+          newGrid[i][j] = 0;
+        }
+      }
+    }
+  }
+  memcpy(grid, newGrid, sizeof(newGrid));
 }
 
 int countNeighbors(int x, int y) {
   int count = 0;
   for (int i = -1; i <= 1; i++) {
     for (int j = -1; j <= 1; j++) {
-      int row = (x + i + rows) % rows;
-      int col = (y + j + cols) % cols;
-      count += grid[row][col];
+      int neighbor_x = (x + i + MATRIX_WIDTH) % MATRIX_WIDTH;
+      int neighbor_y = (y + j + MATRIX_HEIGHT) % MATRIX_HEIGHT;
+      count += grid[neighbor_x][neighbor_y];
     }
   }
   count -= grid[x][y];
-  yield();
   return count;
 }
 
-void copyGrid(int source[][cols], int target[][cols]) {
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
-      target[i][j] = source[i][j];
-    }
-  }
-}
-
-void displayGrid(int grid[][cols]) {
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
-      Serial.print(grid[i][j]);
-    }
-    Serial.println();
-  }
-
-}
-void displayLedGrid(int grid[][cols]) {
-  matrix->clear();
-  for (uint16_t i=0; i<mh; i++) {
-	  for (uint16_t j=0; j<mw; j++) {
-      if (grid[i][j] >= 1) {
-        matrix->drawPixel(j, i, (uint16_t)LED_WHITE_MEDIUM);
-        } else {
-        matrix->drawPixel(j, i, (uint16_t)LED_PURPLE_VERYLOW);
-      }
-	    //matrix->drawPixel(j, i, i%3==0?(uint16_t)LED_BLUE_HIGH:i%3==1?(uint16_t)LED_RED_HIGH:(uint16_t)LED_GREEN_HIGH);
-	    // depending on the matrix size, it's too slow to display each pixel, so
-	    // make the scan init faster. This will however be too fast on a small matrix.
-	    /*#ifdef ESP8266
-	    if (!(j%3)) matrix->show();
-	    yield(); // reset watchdog timer
-	    #elif ESP32
-	    delay(1);
-	    matrix->show();
-	    #else 
-	    matrix->show();
-	    #endif*/
-    }
-  }
+void displayGrid() {
   matrix->show();
 }
