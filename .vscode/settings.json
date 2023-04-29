@@ -1,8 +1,0 @@
-{
-    "files.associations": {
-        "*.asm": "asm-intel-x86-generic",
-        "array": "cpp",
-        "initializer_list": "cpp",
-        "utility": "cpp"
-    }
-}
