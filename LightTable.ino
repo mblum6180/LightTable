@@ -9,7 +9,7 @@
 #define RESET_ITERATIONS 10
 #define FADE_STEPS 5
 #define MIN_BRIGHTNESS 66
-#define OFF_PIXEL_COLOR matrix.Color(10, 50, 10)
+#define OFF_PIXEL_COLOR matrix.Color(2, 9, 2)
 #define RANDOM_LIFE_PROBABILITY 5 // Probability (in percentage) of a new life pixel being added on each update
 
 
